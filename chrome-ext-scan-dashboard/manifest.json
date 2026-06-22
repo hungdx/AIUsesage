@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Usage Tracker",
+  "version": "1.0.0",
+  "description": "Theo doi % usage Cursor va day update ve local server",
+  "permissions": ["alarms", "storage"],
+  "host_permissions": [
+    "https://cursor.com/*",
+    "http://localhost:3333/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Usage Tracker"
+  },
+  "options_page": "options.html"
+}
