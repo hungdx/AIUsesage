@@ -30,17 +30,15 @@
     p.sub { color: var(--muted); font-size: 13px; margin: 0 0 24px; }
     #cards {
       display: grid;
-      grid-auto-flow: column;
-      grid-auto-columns: minmax(0, 1fr);
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
       gap: 14px;
-      width: 100%;
+      max-width: 760px;
     }
     .card {
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 10px;
       padding: 16px;
-      min-width: 0;
     }
     .user {
       font-size: 12px;
@@ -85,7 +83,11 @@
 
     function render(data) {
       const container = document.getElementById("cards");
-      const users = Object.keys(data);
+      const users = Object.keys(data).sort((a, b) => {
+        const remainA = data[a].remainingPercent ?? -1;
+        const remainB = data[b].remainingPercent ?? -1;
+        return remainB - remainA;
+      });
 
       if (users.length === 0) {
         container.innerHTML = '<p class="empty">Chưa có data. Đợi extension fetch lần đầu (hoặc bấm "Fetch now" trong popup).</p>';
