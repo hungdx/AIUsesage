@@ -30,6 +30,96 @@ function saveData(data) {
 
 let store = loadData();
 
+const MS_PER_DAY = 86400000;
+
+function formatPercent(value) {
+  if (value == null || Number.isNaN(Number(value))) return null;
+  return Number(value).toFixed(2);
+}
+
+function toNum(value) {
+  if (value == null || Number.isNaN(Number(value))) return null;
+  return Number(value);
+}
+
+/** Nếu chỉ Auto hoặc chỉ API đang có usage, dùng nó làm % chính; không thì dùng total */
+function resolveMainPercent(totalPercentUsed, autoPercentUsed, apiPercentUsed) {
+  const auto = toNum(autoPercentUsed);
+  const api = toNum(apiPercentUsed);
+  const total = toNum(totalPercentUsed);
+
+  const hasAuto = auto != null && auto > 0;
+  const hasApi = api != null && api > 0;
+
+  if (hasAuto && !hasApi) return auto;
+  if (hasApi && !hasAuto) return api;
+  return total;
+}
+
+/** billingCycleEnd = cuối chu kỳ; bắt đầu = cùng ngày tháng trước */
+function getCycleBounds(resetIso) {
+  const end = new Date(resetIso);
+  if (Number.isNaN(end.getTime())) return null;
+
+  const start = new Date(end);
+  start.setMonth(start.getMonth() - 1);
+  return { start, end };
+}
+
+function computeCycleMetrics(percent, resetIso, now = new Date()) {
+  const bounds = getCycleBounds(resetIso);
+  if (!bounds || percent == null || Number.isNaN(Number(percent))) {
+    return null;
+  }
+
+  const usage = Number(percent);
+  const { start, end } = bounds;
+  const totalDays = Math.max((end - start) / MS_PER_DAY, 1);
+  const elapsedDays = Math.min(
+    Math.max((now - start) / MS_PER_DAY, 0),
+    totalDays
+  );
+
+  const currentAvgPercent =
+    elapsedDays > 0 ? usage / elapsedDays : usage;
+  const allowedAvgPercent = 100 / totalDays;
+  const allowedPercentNow = (elapsedDays / totalDays) * 100;
+  const isOverPace = usage > allowedPercentNow;
+
+  return {
+    cycleStart: start.toISOString(),
+    cycleEnd: end.toISOString(),
+    elapsedDays: Math.round(elapsedDays * 10) / 10,
+    totalDays: Math.round(totalDays * 10) / 10,
+    currentAvgPercent: Math.round(currentAvgPercent * 100) / 100,
+    allowedAvgPercent: Math.round(allowedAvgPercent * 100) / 100,
+    allowedPercentNow: Math.round(allowedPercentNow * 100) / 100,
+    isOverPace,
+  };
+}
+
+function enrichUsage(entry) {
+  if (!entry) return entry;
+
+  const totalPercentUsed = formatPercent(entry.totalPercentUsed ?? entry.percent);
+  const autoPercentUsed = formatPercent(entry.autoPercentUsed);
+  const apiPercentUsed = formatPercent(entry.apiPercentUsed);
+  const percent = formatPercent(
+    resolveMainPercent(totalPercentUsed, autoPercentUsed, apiPercentUsed)
+  );
+
+  const formatted = {
+    ...entry,
+    totalPercentUsed,
+    percent,
+    autoPercentUsed,
+    apiPercentUsed,
+  };
+
+  const metrics = computeCycleMetrics(formatted.percent, formatted.reset);
+  return metrics ? { ...formatted, ...metrics } : formatted;
+}
+
 // ===== Routes =====
 
 // Extension gọi vào đây mỗi khi fetch xong
@@ -49,32 +139,47 @@ app.post("/api/updateUsages", (req, res) => {
     return res.status(400).json({ error: "Thiếu field 'user' trong body" });
   }
 
+  const totalPercentUsed = formatPercent(percent);
+  const auto = formatPercent(autoPercentUsed);
+  const api = formatPercent(apiPercentUsed);
+
   store[user] = {
     email: email ?? null,
-    percent: percent ?? null,
+    totalPercentUsed,
+    percent: formatPercent(resolveMainPercent(totalPercentUsed, auto, api)),
     reset: reset ?? null,
     membershipType: membershipType ?? null,
-    autoPercentUsed: autoPercentUsed ?? null,
-    apiPercentUsed: apiPercentUsed ?? null,
+    autoPercentUsed: auto,
+    apiPercentUsed: api,
     breakdown: breakdown ?? null,
     updatedAt: new Date().toISOString(),
   };
 
   saveData(store);
-  console.log(`[updateUsages] ${user}: ${percent}% (reset ${reset})`);
-  res.json({ ok: true, user, data: store[user] });
+
+  const enriched = enrichUsage(store[user]);
+  const paceNote = enriched.isOverPace
+    ? ` ⚠ vượt pace (${enriched.percent}% > ${enriched.allowedPercentNow}% cho phép)`
+    : "";
+  console.log(
+    `[updateUsages] ${user}: ${enriched.percent}% (total ${totalPercentUsed}%, reset ${reset})${paceNote}`
+  );
+  res.json({ ok: true, user, data: enriched });
 });
 
 // Lấy toàn bộ data (dashboard dùng cái này)
 app.get("/api/usages", (_req, res) => {
-  res.json(store);
+  const enriched = Object.fromEntries(
+    Object.entries(store).map(([user, entry]) => [user, enrichUsage(entry)])
+  );
+  res.json(enriched);
 });
 
 // Lấy data của 1 user cụ thể
 app.get("/api/usages/:user", (req, res) => {
   const data = store[req.params.user];
   if (!data) return res.status(404).json({ error: "Không tìm thấy user này" });
-  res.json(data);
+  res.json(enrichUsage(data));
 });
 
 app.listen(PORT, () => {
