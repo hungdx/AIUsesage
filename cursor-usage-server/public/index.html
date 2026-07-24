@@ -110,7 +110,7 @@
               <div class="muted">Reset: ${reset}</div>
               <div class="muted small">Chu kỳ: ${cycleStart} → ${reset}</div>
               <div class="medium">TB hiện tại: ${currentAvg}%/ngày </div>
-              <div class="medium">Cho phép: ${allowedAvg}%/ngày</div>
+              <div class="medium">Cho phép: ${allowedAvg}%/ngày <span class="muted small">(còn ${d.remainingPercent ?? "--"}% · ${d.remainingDays ?? "--"} ngày, đệm ${d.resetBufferDays ?? 10} ngày)</span></div>
               <div class="muted small">Mức cho phép đến nay: ${allowedNow}%</div>
               ${overPace ? '<div class="alert">⚠ Đang dùng nhanh hơn mức cho phép</div>' : ""}
               <div class="muted small">Cập nhật: ${updatedAt}</div>

@@ -31,6 +31,11 @@ function saveData(data) {
 let store = loadData();
 
 const MS_PER_DAY = 86400000;
+const RESET_BUFFER_DAYS = 10;
+
+function round2(n) {
+  return Math.round(n * 100) / 100;
+}
 
 function formatPercent(value) {
   if (value == null || Number.isNaN(Number(value))) return null;
@@ -79,21 +84,41 @@ function computeCycleMetrics(percent, resetIso, now = new Date()) {
     Math.max((now - start) / MS_PER_DAY, 0),
     totalDays
   );
+  const remainingDays = Math.max((end - now) / MS_PER_DAY, 0);
+  const remainingPercent = Math.max(100 - usage, 0);
 
   const currentAvgPercent =
     elapsedDays > 0 ? usage / elapsedDays : usage;
-  const allowedAvgPercent = 100 / totalDays;
-  const allowedPercentNow = (elapsedDays / totalDays) * 100;
-  const isOverPace = usage > allowedPercentNow;
+
+  // Trải % còn lại trên số ngày trước vùng đệm 10 ngày cuối chu kỳ
+  const budgetDays =
+    remainingDays > RESET_BUFFER_DAYS
+      ? remainingDays - RESET_BUFFER_DAYS
+      : Math.max(remainingDays, 1);
+  const allowedAvgPercent =
+    usage >= 100 ? 0 : remainingPercent / budgetDays;
+
+  const budgetTotalDays = Math.max(totalDays - RESET_BUFFER_DAYS, 1);
+  const allowedPercentNow = Math.min(
+    (elapsedDays / budgetTotalDays) * 100,
+    100
+  );
+
+  const isOverPace =
+    usage >= 100 ||
+    (elapsedDays > 0 && currentAvgPercent > allowedAvgPercent);
 
   return {
     cycleStart: start.toISOString(),
     cycleEnd: end.toISOString(),
-    elapsedDays: Math.round(elapsedDays * 10) / 10,
-    totalDays: Math.round(totalDays * 10) / 10,
-    currentAvgPercent: Math.round(currentAvgPercent * 100) / 100,
-    allowedAvgPercent: Math.round(allowedAvgPercent * 100) / 100,
-    allowedPercentNow: Math.round(allowedPercentNow * 100) / 100,
+    elapsedDays: round2(elapsedDays),
+    totalDays: round2(totalDays),
+    remainingDays: round2(remainingDays),
+    remainingPercent: round2(remainingPercent),
+    currentAvgPercent: round2(currentAvgPercent),
+    allowedAvgPercent: round2(allowedAvgPercent),
+    allowedPercentNow: round2(allowedPercentNow),
+    resetBufferDays: RESET_BUFFER_DAYS,
     isOverPace,
   };
 }
