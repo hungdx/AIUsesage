@@ -47,6 +47,83 @@ function toNum(value) {
   return Number(value);
 }
 
+function getLocalDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function isSameCycle(firstReset, secondReset) {
+  if (firstReset == null || secondReset == null) {
+    return firstReset === secondReset;
+  }
+
+  const firstTime = new Date(firstReset).getTime();
+  const secondTime = new Date(secondReset).getTime();
+  return Number.isNaN(firstTime) || Number.isNaN(secondTime)
+    ? firstReset === secondReset
+    : firstTime === secondTime;
+}
+
+function trackDailyUsage(previousEntry, currentPercent, reset, now) {
+  const today = getLocalDateKey(now);
+  const dailyUsage = {
+    ...(previousEntry?.dailyUsagePercentByDate ?? {}),
+  };
+
+  if (currentPercent != null) {
+    dailyUsage[today] ??= 0;
+    dailyUsage[today] = toNum(dailyUsage[today]) ?? 0;
+
+    const tracking = previousEntry?.dailyUsageTracking;
+    let previousDate = tracking?.date;
+    let previousPercent = toNum(tracking?.percent);
+    let previousReset = tracking?.reset;
+
+    if (!tracking && previousEntry?.updatedAt) {
+      const previousUpdatedAt = new Date(previousEntry.updatedAt);
+      if (!Number.isNaN(previousUpdatedAt.getTime())) {
+        previousDate = getLocalDateKey(previousUpdatedAt);
+        previousPercent = toNum(
+          resolveMainPercent(
+            previousEntry.totalPercentUsed ?? previousEntry.percent,
+            previousEntry.autoPercentUsed,
+            previousEntry.apiPercentUsed
+          )
+        );
+        previousReset = previousEntry.reset;
+      }
+    }
+
+    if (
+      previousDate === today &&
+      previousPercent != null &&
+      currentPercent >= previousPercent &&
+      isSameCycle(previousReset, reset)
+    ) {
+      dailyUsage[today] = round2(
+        dailyUsage[today] + currentPercent - previousPercent
+      );
+    }
+  }
+
+  const oldestDate = new Date(now);
+  oldestDate.setDate(oldestDate.getDate() - 365);
+  const oldestDateKey = getLocalDateKey(oldestDate);
+  for (const date of Object.keys(dailyUsage)) {
+    if (date < oldestDateKey) delete dailyUsage[date];
+  }
+
+  return {
+    dailyUsagePercentByDate: dailyUsage,
+    dailyUsageTracking:
+      currentPercent == null
+        ? previousEntry?.dailyUsageTracking ?? null
+        : { date: today, percent: currentPercent, reset },
+  };
+}
+
 /** Nếu chỉ Auto hoặc chỉ API đang có usage, dùng nó làm % chính; không thì dùng total */
 function resolveMainPercent(totalPercentUsed, autoPercentUsed, apiPercentUsed) {
   const auto = toNum(autoPercentUsed);
@@ -126,6 +203,11 @@ function computeCycleMetrics(percent, resetIso, now = new Date()) {
 function enrichUsage(entry) {
   if (!entry) return entry;
 
+  const {
+    dailyUsagePercentByDate = {},
+    dailyUsageTracking: _dailyUsageTracking,
+    ...publicEntry
+  } = entry;
   const totalPercentUsed = formatPercent(entry.totalPercentUsed ?? entry.percent);
   const autoPercentUsed = formatPercent(entry.autoPercentUsed);
   const apiPercentUsed = formatPercent(entry.apiPercentUsed);
@@ -134,7 +216,7 @@ function enrichUsage(entry) {
   );
 
   const formatted = {
-    ...entry,
+    ...publicEntry,
     totalPercentUsed,
     percent,
     autoPercentUsed,
@@ -142,7 +224,15 @@ function enrichUsage(entry) {
   };
 
   const metrics = computeCycleMetrics(formatted.percent, formatted.reset);
-  return metrics ? { ...formatted, ...metrics } : formatted;
+  const now = new Date();
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  return {
+    ...formatted,
+    ...(metrics ?? {}),
+    yesterdayUsagePercent: dailyUsagePercentByDate[getLocalDateKey(yesterday)] ?? null,
+    todayUsagePercent: dailyUsagePercentByDate[getLocalDateKey(now)] ?? null,
+  };
 }
 
 // ===== Routes =====
@@ -168,16 +258,28 @@ app.post("/api/updateUsages", (req, res) => {
   const auto = formatPercent(autoPercentUsed);
   const api = formatPercent(apiPercentUsed);
 
+  const updatedAt = new Date();
+  const mainPercent = formatPercent(
+    resolveMainPercent(totalPercentUsed, auto, api)
+  );
+  const dailyUsage = trackDailyUsage(
+    store[user],
+    toNum(mainPercent),
+    reset ?? null,
+    updatedAt
+  );
+
   store[user] = {
     email: email ?? null,
     totalPercentUsed,
-    percent: formatPercent(resolveMainPercent(totalPercentUsed, auto, api)),
+    percent: mainPercent,
     reset: reset ?? null,
     membershipType: membershipType ?? null,
     autoPercentUsed: auto,
     apiPercentUsed: api,
     breakdown: breakdown ?? null,
-    updatedAt: new Date().toISOString(),
+    updatedAt: updatedAt.toISOString(),
+    ...dailyUsage,
   };
 
   saveData(store);

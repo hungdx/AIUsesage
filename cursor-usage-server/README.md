@@ -37,5 +37,6 @@ Mở `http://localhost:3333` trên trình duyệt để xem dashboard cập nh�
 ## Lưu ý
 
 - Data lưu ở `data.json` (đã gitignore) — restart server không mất data.
+- Dashboard ghi nhận phần trăm usage tăng giữa các lần cập nhật cùng ngày để hiển thị tổng hôm qua và hôm nay. Lịch sử bắt đầu từ lần cập nhật hiện có; ngày không có dữ liệu sẽ hiển thị `--`.
 - Chưa có auth — chỉ nên chạy local, không expose ra ngoài internet.
 - Nếu đổi sang port khác port 3333, nhớ cập nhật lại **Server URL** trong Options của extension cho khớp.

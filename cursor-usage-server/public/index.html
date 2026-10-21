@@ -105,6 +105,8 @@
           const currentAvg = d.currentAvgPercent != null ? d.currentAvgPercent : "--";
           const allowedAvg = d.allowedAvgPercent != null ? d.allowedAvgPercent : "--";
           const allowedNow = d.allowedPercentNow != null ? d.allowedPercentNow : "--";
+          const yesterdayUsage = d.yesterdayUsagePercent != null ? d.yesterdayUsagePercent : "--";
+          const todayUsage = d.todayUsagePercent != null ? d.todayUsagePercent : "--";
           const overPace = d.isOverPace === true;
           return `
             <div class="card${overPace ? " over-pace" : ""}">
@@ -115,6 +117,8 @@
               <div class="muted small">Chu kỳ: ${cycleStart} → ${reset}</div>
               <div class="medium">TB hiện tại: ${currentAvg}%/ngày </div>
               <div class="medium">Cho phép: ${allowedAvg}%/ngày </div>
+              <div class="muted small">Tổng % hôm qua đã dùng: ${yesterdayUsage}%</div>
+              <div class="muted small">Hiện tại % hôm nay đã dùng: ${todayUsage}%</div>
               <div class="muted small">(còn ${d.remainingPercent ?? "--"}% · <span class="alert">${d.remainingDays ?? "--"}</span> ngày, đệm ${d.resetBufferDays ?? 10} ngày)</div>
               <div class="muted small">Mức cho phép đến nay: ${allowedNow}%</div>
               ${overPace ? '<div class="alert">⚠ Đang dùng nhanh hơn mức cho phép</div>' : ""}
