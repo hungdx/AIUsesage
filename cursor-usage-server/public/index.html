@@ -32,7 +32,7 @@
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
       gap: 14px;
-      max-width: 760px;
+      max-width: 100%;
     }
     .card {
       background: var(--card);
@@ -110,7 +110,7 @@
           const overPace = d.isOverPace === true;
           return `
             <div class="card${overPace ? " over-pace" : ""}">
-              <div class="user">${user}</div>
+              <div class="user">${d.provider ? `${d.provider.toUpperCase()} · ${d.user || user}` : user}</div>
               <div class="percent">${d.percent ?? "--"}%</div>
               <div class="muted">Auto ${d.autoPercentUsed ?? "--"}% · API ${d.apiPercentUsed ?? "--"}%</div>
               <div class="muted">Reset: ${reset}</div>

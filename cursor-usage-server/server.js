@@ -47,6 +47,15 @@ function toNum(value) {
   return Number(value);
 }
 
+function normalizeProvider(value) {
+  const provider = String(value ?? "cursor").trim().toLowerCase();
+  return provider === "codex" ? "codex" : "cursor";
+}
+
+function getUsageKey(provider, user) {
+  return `${provider}:${user}`;
+}
+
 function getLocalDateKey(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -96,8 +105,11 @@ function trackDailyUsage(previousEntry, currentPercent, reset, now) {
       }
     }
 
+    // Delta since the last sample belongs to today, including the first
+    // sample after midnight. Requiring previousDate === today dropped that
+    // usage, so a new day was saved as 0 and yesterday never received it.
     if (
-      previousDate === today &&
+      previousDate &&
       previousPercent != null &&
       currentPercent >= previousPercent &&
       isSameCycle(previousReset, reset)
@@ -241,6 +253,7 @@ function enrichUsage(entry) {
 app.post("/api/updateUsages", (req, res) => {
   const {
     user,
+    provider: requestedProvider = "cursor",
     email,
     percent,
     reset,
@@ -254,6 +267,8 @@ app.post("/api/updateUsages", (req, res) => {
     return res.status(400).json({ error: "Thiếu field 'user' trong body" });
   }
 
+  const provider = normalizeProvider(requestedProvider);
+
   const totalPercentUsed = formatPercent(percent);
   const auto = formatPercent(autoPercentUsed);
   const api = formatPercent(apiPercentUsed);
@@ -262,14 +277,21 @@ app.post("/api/updateUsages", (req, res) => {
   const mainPercent = formatPercent(
     resolveMainPercent(totalPercentUsed, auto, api)
   );
+  const usageKey = getUsageKey(provider, user);
+  // Older Cursor records used the bare user name as their key. Reuse that
+  // record on its first provider-aware update so history is retained.
+  const legacyCursorEntry = provider === "cursor" ? store[user] : undefined;
+  const previousEntry = store[usageKey] ?? legacyCursorEntry;
   const dailyUsage = trackDailyUsage(
-    store[user],
+    previousEntry,
     toNum(mainPercent),
     reset ?? null,
     updatedAt
   );
 
-  store[user] = {
+  store[usageKey] = {
+    user,
+    provider,
     email: email ?? null,
     totalPercentUsed,
     percent: mainPercent,
@@ -282,16 +304,20 @@ app.post("/api/updateUsages", (req, res) => {
     ...dailyUsage,
   };
 
+  if (legacyCursorEntry && usageKey !== user) {
+    delete store[user];
+  }
+
   saveData(store);
 
-  const enriched = enrichUsage(store[user]);
+  const enriched = enrichUsage(store[usageKey]);
   const paceNote = enriched.isOverPace
     ? ` ⚠ vượt pace (${enriched.percent}% > ${enriched.allowedPercentNow}% cho phép)`
     : "";
   console.log(
-    `[updateUsages] ${user}: ${enriched.percent}% (total ${totalPercentUsed}%, reset ${reset})${paceNote}`
+    `[updateUsages] ${provider}:${user}: ${enriched.percent}% (total ${totalPercentUsed}%, reset ${reset})${paceNote}`
   );
-  res.json({ ok: true, user, data: enriched });
+  res.json({ ok: true, user, provider, data: enriched });
 });
 
 // Lấy toàn bộ data (dashboard dùng cái này)

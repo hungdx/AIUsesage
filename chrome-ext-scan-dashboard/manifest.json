@@ -3,9 +3,11 @@
   "name": "Usage Tracker",
   "version": "1.0.0",
   "description": "Theo doi % usage Cursor va day update ve local server",
-  "permissions": ["alarms", "storage"],
+  "permissions": ["alarms", "storage", "scripting"],
   "host_permissions": [
     "https://cursor.com/*",
+    "https://chatgpt.com/*",
+    "https://*.openai.com/*",
     "http://localhost:3333/*"
   ],
   "background": {

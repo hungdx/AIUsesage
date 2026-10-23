@@ -1,5 +1,6 @@
 const DEFAULT_CONFIG = {
   endpointUrl: "https://cursor.com/api/usage-summary",
+  codexEndpointUrl: "https://chatgpt.com/backend-api/wham/usage",
   serverUrl: "http://localhost:3333",
   user: "hungfire",
   intervalMinutes: 10,
@@ -8,6 +9,7 @@ const DEFAULT_CONFIG = {
 document.addEventListener("DOMContentLoaded", async () => {
   const config = await chrome.storage.sync.get(DEFAULT_CONFIG);
   document.getElementById("endpointUrl").value = config.endpointUrl;
+  document.getElementById("codexEndpointUrl").value = config.codexEndpointUrl;
   document.getElementById("serverUrl").value = config.serverUrl;
   document.getElementById("user").value = config.user;
   document.getElementById("intervalMinutes").value = config.intervalMinutes;
@@ -15,6 +17,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("save").addEventListener("click", async () => {
     const newConfig = {
       endpointUrl: document.getElementById("endpointUrl").value.trim(),
+      codexEndpointUrl: document.getElementById("codexEndpointUrl").value.trim(),
       serverUrl: document.getElementById("serverUrl").value.trim() || DEFAULT_CONFIG.serverUrl,
       user: document.getElementById("user").value.trim() || DEFAULT_CONFIG.user,
       intervalMinutes: Math.max(1, Number(document.getElementById("intervalMinutes").value) || DEFAULT_CONFIG.intervalMinutes),
